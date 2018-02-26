@@ -50,8 +50,9 @@ def genTorsionFlexure(width_stem,length_flex,height_stem,width_flex):
     x8 = 0; y8 = 0
     x = [x1,x2,x3,x4,x5,x6,x7,x8]
     y = [y1,y2,y3,y4,y5,y6,y7,y8]
-    exterior = x,y
-    return exterior
+    tuple_coords = [(x[i],y[i]) for i in range(len(x))]
+    return shapely.geometry.Polygon(tuple_coords)
+
 
 def genYdX(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
     """
@@ -87,8 +88,8 @@ def genYdX(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
     x12=0.0; y12=0.0
     x = [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12]
     y = [y0,y1,y2,y3,y4,y5,y6,y7,y8,y9,y10,y11,y12]
-    exterior = x,y
-    return exterior
+    tuple_coords = [(x[i],y[i]) for i in range(len(x))]
+    return shapely.geometry.Polygon(tuple_coords)
 
 def genSquareCyclicSlit(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start):
     """
@@ -182,27 +183,10 @@ def genSquareCyclicSlit(cut_width,flexure_width,junction_length,edge_space,stem_
         y = np.concatenate((y[:insert_index],vec_y, y[insert_index:]),axis=0)
         # adds to index counter
         insert_index += 3
-    exterior = x,y
-    return exterior
+    tuple_coords = [(x[i],y[i]) for i in range(len(x))]
+    return shapely.geometry.Polygon(tuple_coords)
 
     
-"""
-Make polygon object from exterior and/or interior geometry
-"""
-def makePolygon(exterior, interior=False):
-    import shapely.geometry
-    tuple_exterior_array = []
-    for i in range(len(exterior[0])):
-        tuple_exterior_array.append((exterior[0][i],exterior[1][i]))
-    tuple_interior_array = []
-    if interior != False:
-        for interior_ring in interior:
-            tuple_interior = []
-            for j in range(len(interior_ring[0])):
-                tuple_interior.append((interior_ring[0][j],interior_ring[1][j]))
-            tuple_interior_array.append(tuple_interior)
-    return shapely.geometry.Polygon(tuple_exterior_array, tuple_interior_array)
-
     
 """
 Swichback generator
@@ -218,12 +202,10 @@ def genSwicback(num_turns, width_stem, length_flex, cut_width, width_flex):
     swichbacks = []
     dy = height_stem*2+width_flex
     # first segment
-    start_segment_coord = genTorsionFlexure(width_stem, length_flex, height_stem, width_flex)
-    start_segment = makePolygon(start_segment_coord)
+    start_segment = genTorsionFlexure(width_stem, length_flex, height_stem, width_flex)
     swichbacks.append(start_segment)
     # middle segment
-    middle_segment_coord = genTorsionFlexure(width_stem, length_flex - cut_width/2, height_stem, width_flex)
-    middle_segment = makePolygon(middle_segment_coord)
+    middle_segment = genTorsionFlexure(width_stem, length_flex - cut_width/2, height_stem, width_flex)
     # last segment
     middle_segment_mirror = shapely.affinity.scale(geom=middle_segment, xfact=-1, yfact=1, origin='center')
     end_segment = shapely.affinity.translate(start_segment, xoff=cut_width/2, yoff=dy*(num_turns*2))
@@ -244,9 +226,7 @@ Make unit cell of pattern
 """
 
 def generatePmmUnit(generating_unit):
-    bounds = generating_unit.bounds
-    ymin = bounds[1]
-    xmax = bounds[2]
+    [xmin, ymin, xmax, ymax] = generating_unit.bounds
     mirrored_x = shapely.affinity.scale(generating_unit, xfact=-1,yfact=1,origin=(xmax,ymin))
     mirrored_y = shapely.affinity.scale(generating_unit, xfact=1,yfact=-1,origin=(xmax,ymin))
     mirrored_xy = shapely.affinity.scale(generating_unit, xfact=-1,yfact=-1,origin=(xmax,ymin))
@@ -255,17 +235,13 @@ def generatePmmUnit(generating_unit):
     return unit_cell
 
 def generatePmUnit(generating_unit):
-    bounds = generating_unit.bounds
-    xmin = bounds[0]
-    ymin = bounds[1]
+    [xmin, ymin, xmax, ymax] = generating_unit.bounds
     mirrored_y = shapely.affinity.scale(generating_unit, xfact=1,yfact=-1,origin=(ymin,xmin))
     unit_cell = shapely.ops.cascaded_union([generating_unit,mirrored_y])
     return unit_cell
 
 def genP4mUnit(generating_unit):
-    bounds = generating_unit.bounds
-    xmax = bounds[2]
-    ymax = bounds[3]
+    [xmin, ymin, xmax, ymax] = generating_unit.bounds
     mirrored_y = shapely.affinity.scale(generating_unit, xfact=-1,yfact=1,origin=(xmax,ymax))
     shapes = []
     shapes.append(generating_unit)
@@ -282,44 +258,31 @@ Master generator
 Combines previous functions to create a unit of the desired pattern
 """
 
-def makeSlitts(width_stem,length_flex,height_stem,width_flex):
-    tor_flex = genTorsionFlexure(width_stem,length_flex,height_stem,width_flex)
-    tor_gen = makePolygon(tor_flex)
-    tor_unit = generatePmmUnit(tor_gen)
-    return tor_unit
-
 def makeInsideLET(width_stem,length_flex,height_stem,width_flex):
-    flexure = genTorsionFlexure(width_stem,length_flex,height_stem,width_flex)
-    flexure_gen = makePolygon(flexure)
+    flexure_gen = genTorsionFlexure(width_stem,length_flex,height_stem,width_flex)
     outside_let_unit = generatePmmUnit(flexure_gen)
     return outside_let_unit
 
 def makeOutsideLET(width_stem,length_flex,height_stem,width_flex):
     import shapely.affinity
-    flexure = genTorsionFlexure(width_stem,length_flex,height_stem,width_flex)
-    flexure_gen = makePolygon(flexure)
+    flexure_gen = genTorsionFlexure(width_stem,length_flex,height_stem,width_flex)
     flexure_mirror_gen = shapely.affinity.scale(flexure_gen, xfact=-1, yfact=1, origin='center')
     outside_let_unit = generatePmmUnit(flexure_mirror_gen)
     return outside_let_unit
 
 def makeYdX(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
     YdX_gen = genYdX(solid_width,flexure_length,flexure_width,cut_width,thetaDeg)
-    YdX_gen = makePolygon(YdX_gen)
     YdX_unit = generatePmmUnit(YdX_gen)
     return YdX_unit
 
 def makeSqCyclicSlitt(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start):
     sq_cyclic_slit_gen = genSquareCyclicSlit(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start)
-    sq_cyclic_slit_gen = makePolygon(sq_cyclic_slit_gen)
     sq_cyclic_slit_unit = genP4mUnit(sq_cyclic_slit_gen)
     return sq_cyclic_slit_unit
 
 def makeSqCyclicSlittFlexure(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start):
     sq_cyclic_slit_gen = genSquareCyclicSlit(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start)
-    sq_cyclic_slit_gen = makePolygon(sq_cyclic_slit_gen)
-    bounds = sq_cyclic_slit_gen.bounds
-    ymin = bounds[1]
-    xmax = bounds[2]
+    [xmin, ymin, xmax, ymax] = sq_cyclic_slit_gen.bounds
     sq_cyclic_slit_gen_mx = shapely.affinity.scale(geom=sq_cyclic_slit_gen, xfact=1.0, yfact=-1.0, zfact=1.0, origin=(xmax,ymin))
     sq_cyclic_slit_gen_my = shapely.affinity.scale(geom=sq_cyclic_slit_gen, xfact=-1.0, yfact=1.0, zfact=1.0, origin=(xmax,ymin))
     sq_cyclic_slit_gen_mxy = shapely.affinity.scale(geom=sq_cyclic_slit_gen, xfact=-1.0, yfact=-1.0, zfact=1.0, origin=(xmax,ymin))
@@ -377,11 +340,7 @@ def generateP2LET(width_stem,length_flex,height_stem,width_flex, skew_angle, nce
     unit_cell.buffer(0)
     
     # Maps the pattern
-    bounds = generating_unit.bounds
-    xmin = bounds[0]
-    ymin = bounds[1]
-    xmax = bounds[2]
-    ymax = bounds[3]
+    [xmin, ymin, xmax, ymax] = generating_unit.bounds
     dy = ymax-ymin
     dx = (xmax-xmin)
     dx_off = tan(skew_angle*(pi/180))*dy
@@ -402,11 +361,7 @@ def mapSurface(polygon_cell, ncell_x, ncell_y, hex_cell=False):
     """
     Creates a nx x ny surface of units cells. For hexagonal units, hex_cell = True
     """
-    bounds = polygon_cell.bounds
-    xmin = bounds[0]
-    ymin = bounds[1]
-    xmax = bounds[2]
-    ymax = bounds[3]
+    [xmin, ymin, xmax, ymax] = polygon_cell.bounds
     dy = ymax-ymin
     dx = xmax-xmin
     if hex_cell == True:
@@ -426,7 +381,7 @@ Test calls for functions
 #plotPolygon(genSwicback(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
 
 #Units
-#plotPolygon(makeSqCyclicSlitt(cut_width=0.5, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1 ,num_flex=3 ,inside_start=False))
+plotPolygon(makeSqCyclicSlitt(cut_width=0.5, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1 ,num_flex=3 ,inside_start=False))
 #plotPolygon(makeYdX(solid_width=1, flexure_length=5, flexure_width=1, cut_width = 0.5 ,thetaDeg=15))
 #plotPolygon(makeOutsideLET(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
 #plotPolygon(makeInsideLET(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
@@ -434,12 +389,36 @@ Test calls for functions
 
 #Surfaces
 #plotPolygon(generateP2LET(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
-plotPolygon(generatePmgLET(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
+#plotPolygon(11111111111111generatePmgLET(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
 
 #Flexures
 #plotPolygon(makeSqCyclicSlittFlexure(cut_width=1, flexure_width=1 ,junction_length=1, edge_space=1.5, stem_width=1 ,num_flex=3 ,inside_start=True))
 
 
 
+
+
+
+"""
+Make polygon object from exterior and/or interior geometry
+"""
+def makePolygon(exterior, interior=False):
+    """
+    made redudant by:
+    tuple_coords = [(x[i],y[i]) for i in range(len(x))]
+    return shapely.geometry.Polygon(tuple_coords)
+    """
+    import shapely.geometry
+    tuple_exterior_array = []
+    for i in range(len(exterior[0])):
+        tuple_exterior_array.append((exterior[0][i],exterior[1][i]))
+    tuple_interior_array = []
+    if interior != False:
+        for interior_ring in interior:
+            tuple_interior = []
+            for j in range(len(interior_ring[0])):
+                tuple_interior.append((interior_ring[0][j],interior_ring[1][j]))
+            tuple_interior_array.append(tuple_interior)
+    return shapely.geometry.Polygon(tuple_exterior_array, tuple_interior_array)
 
 
