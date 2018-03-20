@@ -105,12 +105,12 @@ def make_square_let_gen_reg(cut_width,flexure_width,junction_length,edge_space,s
     import numpy as np
     a = cut_width; b = flexure_width; c = junction_length; d = edge_space; e = stem_width
     sqrt2 = 2**0.5
-    ax = a/sqrt2/2 # x displacement along diagonal cut
+    ax = a/sqrt2/2.0 # x displacement along diagonal cut
     dx = a+b # displacement y direction
     dy = dx # displacement y direction
-    h0 = c+a/2 # height in triangle
-    l1 = a/2 # height baseline -> flexure bottom
-    l2 = b+a/2 # height baseline -> flexure top
+    h0 = c+a/2.0 # height in triangle
+    l1 = a/2.0 # height baseline -> flexure bottom
+    l2 = b+a/2.0 # height baseline -> flexure top
     x = np.array([])
     y = np.array([])
     
@@ -132,8 +132,10 @@ def make_square_let_gen_reg(cut_width,flexure_width,junction_length,edge_space,s
     if inside_start == False: # outside start
         x = np.append(x,h0) # 0
         y = np.append(y,h0) #
-        x = np.append(x,0) # 1
-        y = np.append(y,0) #
+        x = np.append(x,0+ax/2) # 1
+        y = np.append(y,0+ax/2) # 1
+        x = np.append(x,0+ax) # 1'
+        y = np.append(y,0) # 1'
         x = np.append(x,ax) # 2
         y = np.append(y,0) #
         x = np.append(x,ax+d) # 3
@@ -144,7 +146,7 @@ def make_square_let_gen_reg(cut_width,flexure_width,junction_length,edge_space,s
         y = np.append(y,l1) #
         x = np.append(x,h0) # 0
         y = np.append(y,h0) #
-        insert_index = 3
+        insert_index = 4
                 
     for n in range(num_flex):
         vec_x = np.array([])
@@ -192,22 +194,26 @@ def make_square_let_gen_reg(cut_width,flexure_width,junction_length,edge_space,s
     coords = [(x[i],y[i]) for i in range(len(x))]
     return shapely.geometry.Polygon(coords)
 
+
+"""
+Triangular versons are the 120-deg version that create triangular tiles
+"""
+
 def make_triangular_let_gen_reg(cut_width, flexure_width, junction_length, 
-               edge_space, stem_width, num_flex, inside_start):
+               edge_space, stem_width, num_flex, inside_start): # was not the 
     """
-    Generation of 1/8 of square cyclic slits. Full cell is generated with p4m.
-    Returns a exterior ring of coorinates
+    Generates 1/12 of a LET that maps with the p6m group
     """
     import numpy as np
     a = cut_width; b = flexure_width; c = junction_length; d = edge_space; e = stem_width
     sqrt3 = 3**0.5
     dy = a+b # displacement y direction
     dx = sqrt3*dy # displacement x direction
-    h0 = c+a/2 # height in triangle    
+    h0 = c+a/2.0 # height in triangle
     ax = a*sqrt3/2 # x displacement along diagonal cut
-    l1 = a/2 # height baseline -> flexure bottom
-    l2 = b+a/2 # height baseline -> flexure top
-    tol = 0.01
+    l1 = a/2.0 # height baseline -> flexure bottom
+    l2 = b+a/2.0 # height baseline -> flexure top
+    tol = 0.0001
     x = np.array([])
     y = np.array([])
     
@@ -229,8 +235,8 @@ def make_triangular_let_gen_reg(cut_width, flexure_width, junction_length,
     if inside_start == False: # outside start
         x = np.append(x,[sqrt3*h0]) # x0
         y = np.append(y,[h0]) # y0
-        x = np.append(x,[0-tol]) # x1
-        y = np.append(y,[0]) #y1
+        x = np.append(x,[3*ax/4-tol]) # x1
+        y = np.append(y,[sqrt3*ax/4]) #y1
         x = np.append(x,[ax]) # x1'
         y = np.append(y,[0]) #y1'
         x = np.append(x,[d+ax]) # x2
@@ -265,7 +271,7 @@ def make_triangular_let_gen_reg(cut_width, flexure_width, junction_length,
         else: # build outside-in
             vec_x = np.append(vec_x, [ax+sqrt3*l1])   # x = sqrt3*a/2 for N = 2 and ins=False, #should be 2* for ins = True
             vec_y = np.append(vec_y, [l1])
-            vec_x = np.append(vec_x, [sqrt3*h-e]) # was sqrt3*h-e 
+            vec_x = np.append(vec_x, [sqrt3*h-e])
             vec_y = np.append(vec_y, [l1])
             vec_x = np.append(vec_x, [sqrt3*h-e])
             vec_y = np.append(vec_y, [0])
@@ -287,7 +293,125 @@ def make_triangular_let_gen_reg(cut_width, flexure_width, junction_length,
         insert_index += 3
     coords = [(x[i],y[i]) for i in range(len(x))]
     return shapely.geometry.Polygon(coords)
-    
+
+
+def make_p6m_unit(generating_region):
+    """
+    The transformations done on a generating unit to make the p6m pattern
+    Notes: works only for 120 deg flexure
+    """
+    xmin, ymin, xmax, ymax = generating_region.bounds
+    mirrored_y = shapely.affinity.scale(generating_region, xfact=-1,yfact=1,
+                                        origin=(xmax,ymax))
+    shapes = []
+    shapes.append(generating_region)
+    shapes.append(mirrored_y)
+    for i in range(1,4):
+        shapes.append(shapely.affinity.rotate(generating_region,angle=(120*i),
+                                              origin=(xmax,ymax)))
+        shapes.append(shapely.affinity.rotate(mirrored_y,angle=(120*i), 
+                                              origin=(xmax,ymax)))
+    unit_cell_half = shapely.ops.cascaded_union(shapes)
+    # duplicate unit_cell_half
+    unit_cell_half_rotated = shapely.affinity.rotate(unit_cell_half,angle=(300), 
+                                                     origin=(xmax*2,ymin))
+    unit_cell = shapely.ops.cascaded_union([unit_cell_half, unit_cell_half_rotated])
+    return unit_cell
+
+
+def make_triangular_let_flexure(cut_width, flexure_width, 
+            junction_length, edge_space, stem_width, num_flex, inside_start):
+    """
+    Notes: works only for 30-120-30 deg generating region
+    """
+    generating_region = make_triangular_let_gen_reg(cut_width, flexure_width, 
+            junction_length, edge_space, stem_width, num_flex, inside_start)
+    xmin, ymin, xmax, ymax = generating_region.bounds
+    mirrored_y = shapely.affinity.scale(generating_region, xfact=-1,yfact=1,origin=(xmax,ymin))
+    mirrored_x = shapely.affinity.scale(generating_region, xfact=1,yfact=-1,origin=(xmax,ymin))
+    mirrored_xy =shapely.affinity.scale(generating_region, xfact=-1,yfact=-1,origin=(xmax,ymin))
+    shapes = []
+    shapes.append(generating_region)
+    shapes.append(mirrored_y)
+    shapes.append(mirrored_x)
+    shapes.append(mirrored_xy)
+    unit_cell_flex = shapely.ops.cascaded_union(shapes)
+    return unit_cell_flex
+
+
+def make_triangular_let_unit(cut_width, flexure_width, junction_length, edge_space, stem_width, num_flex, inside_start):
+    """
+    Notes: works only for 30-120-30 deg generating region
+    """
+    generating_region = make_triangular_let_gen_reg(cut_width, flexure_width,junction_length, 
+                                       edge_space,stem_width, num_flex, inside_start)
+    triangular_let_unit = make_p6m_unit(generating_region)
+    return triangular_let_unit
+
+
+"""
+Hexagonal versons are the 60-deg version
+These are scaled and not allways 100 %
+"""
+
+
+def make_hexagonal_let_gen_reg(cut_width, flexure_width, junction_length, edge_space, stem_width, num_flex, inside_start):
+    """
+    Generation of 1/8 of hexagonal cyclic slits. Full cell is generated with p6m.
+    Returns a exterior ring of coorinates
+    s = scaled, r = rotated, m = mirrored, t = translated
+    dimensions are scaled - fix!!
+    """
+    edge_space *= 3
+    stem_width *= 3
+    generating_unit = make_triangular_let_gen_reg(cut_width, flexure_width,junction_length, edge_space, stem_width, num_flex, inside_start) # have to add a edge cut parameter...
+    p6m_sm = shapely.affinity.scale(geom=generating_unit, xfact=(-1/3), yfact=1, zfact=1, origin='center')
+    p6m_smr = shapely.affinity.rotate(geom=p6m_sm, angle=90, origin='center')
+    xmin, ymin, xmax, ymax = p6m_smr.bounds  
+    p6m_smrt = shapely.affinity.translate(geom=p6m_smr, xoff = -xmin, yoff=-ymin)
+    return p6m_smrt
+
+
+def make_hexagonal_let_flexure(cut_width, flexure_width, junction_length, 
+                              edge_space, stem_width, num_flex, inside_start):
+    """
+    Makes the flexure that is maped to the hexagonal lattice
+    Notes:  - works only for 60 deg flexure
+            - uses the regualr ... might have some issues with some lengths
+    """
+    edge_space *= 3
+    stem_width *= 3
+    triangular_let_flexure = make_triangular_let_flexure(cut_width, flexure_width, 
+                                                     junction_length, edge_space, 
+                                                     stem_width, num_flex, 
+                                                     inside_start)
+    hex_cyclic_slit_flexure = shapely.affinity.scale(geom=triangular_let_flexure, 
+                                                       xfact=(1/3), yfact=1, zfact=1, 
+                                                       origin='center')
+    return hex_cyclic_slit_flexure
+
+
+def make_hexagonal_let_unit(cut_width, flexure_width, junction_length, 
+                       edge_space, stem_width, num_flex, inside_start):
+    """
+    Real input length is not accurate, multiply something with 3 to make accurate measures...
+    """
+    edge_space *= 3
+    stem_width *= 3
+    generating_unit = make_hexagonal_let_gen_reg(cut_width, flexure_width, junction_length, edge_space, stem_width, num_flex, inside_start)
+    xmin, ymin, xmax, ymax = generating_unit.bounds 
+    gen_mx = shapely.affinity.scale(geom=generating_unit, xfact=1.0, yfact=-1.0, zfact=1.0, origin=(xmax,ymin))
+    gen_my = shapely.affinity.scale(geom=generating_unit, xfact=-1.0, yfact=1.0, zfact=1.0, origin=(xmax,ymin))
+    gen_mxy = shapely.affinity.scale(geom=generating_unit, xfact=-1.0, yfact=-1.0, zfact=1.0, origin=(xmax,ymin))
+    mirror = shapely.ops.cascaded_union([gen_mx, gen_mxy])
+    xmin, ymin, xmax, ymax = mirror.bounds
+    mirror_rot1 = shapely.affinity.rotate(geom=mirror, angle=60, origin=(xmin,ymax))
+    mirror_rot2 = shapely.affinity.rotate(geom=mirror, angle=-60, origin=(xmax,ymax))
+    one_half = shapely.ops.cascaded_union([mirror_rot1, mirror_rot2, generating_unit, gen_my])
+    xmin, ymin, xmax, ymax = one_half.bounds
+    other_half = shapely.affinity.rotate(geom=one_half, angle=-60, origin=(xmax,ymin))
+    unit = shapely.ops.cascaded_union([one_half, other_half])
+    return unit
     
 """
 Swichback generator
@@ -507,6 +631,7 @@ def make_hexagonal_switchback_tile(cut_width, flexure_width, junction_length, ed
         sb_rotated.append(shapely.affinity.rotate(geom=sb_sixt, angle=60*(1*n), origin=(xcoord,ycoord)))
     return shapely.ops.cascaded_union(sb_rotated)
 
+
 """
 Generator and surface mapping
 """
@@ -577,7 +702,7 @@ def map_surface(polygon_cell, ncell_x, ncell_y, hex_cell=False):
     return surface_polygon
 
 """
-Test calls for functions
+Test calls for functions can be done by uncommenting the following lines
 """
 
 #Generators
@@ -589,8 +714,21 @@ Test calls for functions
 ## LET
 #plotPolygon(make_outside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
 #plotPolygon(make_inside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
-#plotPolygon(make_square_let_unit(cut_width=0.5, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1 ,num_flex=3 ,inside_start=False))
+
+# Square LET
+#plotPolygon(make_square_let_gen_reg(cut_width=1, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
+#plotPolygon(make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
+
+# Triangular LET
 #plotPolygon(make_triangular_let_gen_reg(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
+#plotPolygon(make_triangular_let_unit(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
+#plotPolygon(make_triangular_let_flexure(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=1,stem_width=1,num_flex=3,inside_start=False))
+
+# Hexagonal LET
+#plotPolygon(make_hexagonal_let_gen_reg(cut_width=1, flexure_width=2, junction_length=6, edge_space=4, stem_width=2, num_flex=3, inside_start=False)) # 
+#plotPolygon(make_hexagonal_let_unit(cut_width=1, flexure_width=2, junction_length=6, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # BUG fail due to numerical distortions
+#plotPolygon(make_hexagonal_let_flexure(cut_width=0.5, flexure_width=1, junction_length=3, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # not reliable (due to scaling?)
+
 
 ## Switchbacks
 ## Comment: a little tweaking is necessary on the 'default'
@@ -600,7 +738,7 @@ Test calls for functions
 #plotPolygon(make_rectangular_switchback_unit(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
 #plotPolygon(make_triangular_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
 #plotPolygon(make_square_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
-plotPolygon(make_hexagonal_switchback_tile(cut_width=0.5, flexure_width=1, junction_length=2, edge_space=1, num_flex=3, side_cut=1))
+#plotPolygon(make_hexagonal_switchback_tile(cut_width=0.5, flexure_width=1, junction_length=2, edge_space=1, num_flex=3, side_cut=1))
 
 #Surfaces
 #plotPolygon(map_p2_let(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
