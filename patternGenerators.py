@@ -15,16 +15,27 @@ Visualizing
 def plotPolygon(polygon, interior_geom=True):
     """Plots a shapely polygon using the matplotlib library """
     import matplotlib.pyplot as plt
-    fig = plt.figure(1, figsize=(5,5), dpi=90)
-    ax = fig.add_subplot(111)
-    ax.set_title('Polygon')
-    ax.axis('equal')
-    x,y = polygon.exterior.coords.xy
-    ax.plot(x,y,'blue')
-    if interior_geom == True:
-        for interior in polygon.interiors:
-            x,y = interior.coords.xy
-            ax.plot(x,y,'blue')
+    if polygon.type == 'MultiPolygon': 
+        print(polygon.type)
+        polygon = polygon.buffer(0)
+        if polygon.type=='MultPolygon': polygon = polygon.buffer(0.0001, resolution=1) 
+    try:
+        fig = plt.figure(1, figsize=(5,5), dpi=90)
+        ax = fig.add_subplot(111)
+        ax.set_title('Polygon')
+        ax.axis('equal')
+        x,y = polygon.exterior.coords.xy
+        ax.plot(x,y,'blue')
+        if interior_geom == True:
+            for interior in polygon.interiors:
+                x,y = interior.coords.xy
+                ax.plot(x,y,'blue')
+    except:
+        print('Plotting failed of {0}'.format(polygon.type))
+        
+def get_l1_l2(polygon):
+    xmin, ymin, xmax, ymax = polygon.bounds
+    return xmax-xmin, ymax-ymin
             
 """
 Generating regions
@@ -39,6 +50,7 @@ def make_torsion_flexure(width_stem,length_flex,height_stem,width_flex):
     |   ______________| I flex height (c)
     |__|<--------->|   length_flex (b)
     <--> width_stem (a)
+    l1, l2, angle = 2*a+b, 2*c+d, 90
     """
     a = width_stem; b = length_flex; c = height_stem; d = width_flex
     x1 = 0; y1 = c+d
@@ -59,6 +71,7 @@ def make_torsion_flexure(width_stem,length_flex,height_stem,width_flex):
 def make_ydx_gen_reg(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
     """
     Full unit generated through pmm
+    l1, l2, angle = w, h, 90
     """
     import math
     a = solid_width; b = flexure_length; c = flexure_width; d = cut_width
@@ -97,10 +110,12 @@ def make_ydx_gen_reg(solid_width,flexure_length,flexure_width,cut_width,thetaDeg
 LET generators
 """
 
-def make_square_let_gen_reg(cut_width,flexure_width,junction_length,edge_space,stem_width,num_flex,inside_start):
+def make_square_let_gen_reg(cut_width, flexure_width, junction_length, 
+                            edge_space, stem_width, num_flex, inside_start):
     """
     Generation of 1/8 of square cyclic slits. Full cell is generated with p4m.
     Returns a exterior ring of coorinates
+    l1, l2, angle = h, h, 45
     """
     import numpy as np
     a = cut_width; b = flexure_width; c = junction_length; d = edge_space; e = stem_width
@@ -327,9 +342,9 @@ def make_triangular_let_flexure(cut_width, flexure_width,
     generating_region = make_triangular_let_gen_reg(cut_width, flexure_width, 
             junction_length, edge_space, stem_width, num_flex, inside_start)
     xmin, ymin, xmax, ymax = generating_region.bounds
-    mirrored_y = shapely.affinity.scale(generating_region, xfact=-1,yfact=1,origin=(xmax,ymin))
-    mirrored_x = shapely.affinity.scale(generating_region, xfact=1,yfact=-1,origin=(xmax,ymin))
-    mirrored_xy =shapely.affinity.scale(generating_region, xfact=-1,yfact=-1,origin=(xmax,ymin))
+    mirrored_y = shapely.affinity.scale(generating_region, xfact=-1, yfact=1, origin=(xmax,ymin))
+    mirrored_x = shapely.affinity.scale(generating_region, xfact=1, yfact=-1, origin=(xmax,ymin))
+    mirrored_xy =shapely.affinity.scale(generating_region, xfact=-1, yfact=-1, origin=(xmax,ymin))
     shapes = []
     shapes.append(generating_region)
     shapes.append(mirrored_y)
@@ -342,11 +357,18 @@ def make_triangular_let_flexure(cut_width, flexure_width,
 def make_triangular_let_unit(cut_width, flexure_width, junction_length, edge_space, stem_width, num_flex, inside_start):
     """
     Notes: works only for 30-120-30 deg generating region
+    l1, l2, angle = 2*a+b, 2*c+d, 90
     """
     generating_region = make_triangular_let_gen_reg(cut_width, flexure_width,junction_length, 
                                        edge_space,stem_width, num_flex, inside_start)
     triangular_let_unit = make_p6m_unit(generating_region)
-    return triangular_let_unit
+#    xmin, ymin, xmax, ymax = triangular_let_unit.bounds
+#    height = ymax-ymin # junction_length + num_flex*(flexure_width+cut_width)
+#    l1 = 2*height / (3**0.5)
+#    l2 = l1
+#    angle = 60
+#    lattice_dim = {'l1':l1, 'l2':l2, 'angle':angle}
+    return triangular_let_unit.buffer(0)
 
 
 """
@@ -659,13 +681,12 @@ def map_pmg_let(width_stem,length_flex,height_stem,width_flex, skew_angle, ncell
     surface_polygon = shapely.ops.cascaded_union(cell_duplicates)    
     return surface_polygon
 
-def map_p2_let(width_stem,length_flex,height_stem,width_flex, skew_angle, ncell_x, ncell_y):
+def map_p2_let(width_stem, length_flex, height_stem, width_flex, skew_angle, ncell_x, ncell_y):
     """
     Generates a pmg pattern with symmetry around y axis
     Main problem is the outline of the unit_cell after the skew deformation
     """
-    from math import tan
-    from math import pi
+    from math import tan, pi
     # Generate generating_unit
     generating_unit = make_outside_let(width_stem,length_flex,height_stem,width_flex)
     # Skew deformation
@@ -685,21 +706,40 @@ def map_p2_let(width_stem,length_flex,height_stem,width_flex, skew_angle, ncell_
     surface_polygon = shapely.ops.cascaded_union(cell_duplicates)    
     return surface_polygon
 
-def map_surface(polygon_cell, ncell_x, ncell_y, hex_cell=False):
+def map_surface(unit_cell, ncell_x, ncell_y, lattice='rectangular'):
     """
     Creates a nx x ny surface of units cells. For hexagonal units, hex_cell = True
     """
-    [xmin, ymin, xmax, ymax] = polygon_cell.bounds
-    dy = ymax-ymin
+    [xmin, ymin, xmax, ymax] = unit_cell.bounds
+    dy = ymax-ymin #-0.00001 # there are some nummerical noise, so this is a temp bug fix...
     dx = xmax-xmin
-    if hex_cell == True:
-        dx -= dy/(3**0.5)
     cell_duplicates = []
-    for i in range(ncell_x):
-        for j in range(ncell_y):
-            cell_duplicates.append(shapely.affinity.translate(polygon_cell, xoff=(dx*i), yoff=(dy*j)))
-    surface_polygon = shapely.ops.cascaded_union(cell_duplicates)    
+    if lattice == 'rectangular':
+        for i in range(ncell_y):
+            for j in range(ncell_x):
+                cell_duplicates.append(shapely.affinity.translate(unit_cell, xoff=(dx*j), yoff=(dy*i)))
+                
+    elif lattice == 'rhombic':
+        dx = 2*dy/(3**0.5)
+        for i in range(ncell_y):
+            DX=i*dx/2 # is the addition for each row up
+            for j in range(ncell_x):
+                cell_duplicates.append(shapely.affinity.translate(unit_cell, xoff=(dx*j+DX), yoff=(dy*i)))
+                
+    surface_polygon = combine_borders(cell_duplicates)    
     return surface_polygon
+
+def combine_borders(geoms):
+    return shapely.ops.cascaded_union([
+            geom.buffer(0.00001, resolution=1) if geom.type =='MultiPolygon' 
+            else geom for geom in geoms])
+
+    
+class GenReg():
+    
+    def __init__(self):
+        
+    
 
 """
 Test calls for functions can be done by uncommenting the following lines
@@ -742,13 +782,15 @@ Test calls for functions can be done by uncommenting the following lines
 
 #Surfaces
 #plotPolygon(map_p2_let(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
-#plotPolygon(map_pmg_let(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=10))
+#plotPolygon(map_pmg_let(width_stem=1, length_flex=4, height_stem=0.2, width_flex=1, skew_angle=45, ncell_x=2, ncell_y=10))
+#
+#hex_unit = make_triangular_let_unit(cut_width=1,flexure_width=2,junction_length=4,edge_space=4,stem_width=1,num_flex=3,inside_start=False)
+#mapped_hex = map_surface(unit_cell=hex_unit, ncell_x=3, ncell_y=3, lattice='rhombic')
+#plotPolygon(mapped_hex)
 
 
-
-
-
-
+#TEST CALL
+#polygon = make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False)
 
 
 
