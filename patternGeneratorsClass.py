@@ -124,7 +124,7 @@ class GeneratingRegion(shapely.geometry.Polygon):
         x = [x1,x2,x3,x4,x5,x6,x7,x8]
         y = [y1,y2,y3,y4,y5,y6,y7,y8]
         coords = list(zip(x,y))
-        return shapely.affinity.scale(shapely.geometry.Polygon(coords), xfact=-1)
+        return shapely.geometry.Polygon(coords)
         
     
     def make_square_let_gen_reg(self):
@@ -505,9 +505,9 @@ class Unit(GeneratingRegion):
     def pmm(self):
         generating_unit = self.generating_region
         [xmin, ymin, xmax, ymax] = generating_unit.bounds
-        mirrored_x = shapely.affinity.scale(generating_unit, xfact=-1,yfact=1,origin=(xmax,ymin))
-        mirrored_y = shapely.affinity.scale(generating_unit, xfact=1,yfact=-1,origin=(xmax,ymin))
-        mirrored_xy = shapely.affinity.scale(generating_unit, xfact=-1,yfact=-1,origin=(xmax,ymin))
+        mirrored_x = shapely.affinity.scale(generating_unit, xfact=-1,yfact=1,origin=(xmin,ymin))
+        mirrored_y = shapely.affinity.scale(generating_unit, xfact=1,yfact=-1,origin=(xmin,ymin))
+        mirrored_xy = shapely.affinity.scale(generating_unit, xfact=-1,yfact=-1,origin=(xmin,ymin))
         unit_cell = shapely.ops.cascaded_union([generating_unit,mirrored_x,mirrored_y,mirrored_xy])
         self.unit = unit_cell
         self.make_valid()
