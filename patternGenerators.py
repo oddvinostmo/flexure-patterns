@@ -17,8 +17,12 @@ def plotPolygon(polygon, interior_geom=True):
     import matplotlib.pyplot as plt
     if polygon.type == 'MultiPolygon': 
         print(polygon.type)
+        color =  'red'
         polygon = polygon.buffer(0)
-        if polygon.type=='MultPolygon': polygon = polygon.buffer(0.0001, resolution=1) 
+        if polygon.type=='MultPolygon': 
+            polygon = polygon.buffer(0.0001, resolution=1)
+    else:
+        color = 'blue'
     try:
         fig = plt.figure(1, figsize=(5,5), dpi=90)
         ax = fig.add_subplot(111)
@@ -29,7 +33,7 @@ def plotPolygon(polygon, interior_geom=True):
         if interior_geom == True:
             for interior in polygon.interiors:
                 x,y = interior.coords.xy
-                ax.plot(x,y,'blue')
+                ax.plot(x, y, color)
     except:
         print('Plotting failed of {0}'.format(polygon.type))
         
@@ -68,7 +72,7 @@ def make_torsion_flexure(width_stem,length_flex,height_stem,width_flex):
     return shapely.geometry.Polygon(coords)
 
 
-def make_ydx_gen_reg(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
+def make_ydx_gen_reg(solid_width, flexure_length, flexure_width, cut_width, thetaDeg):
     """
     Full unit generated through pmm
     l1, l2, angle = w, h, 90
@@ -120,7 +124,8 @@ def make_square_let_gen_reg(cut_width, flexure_width, junction_length,
     import numpy as np
     a = cut_width; b = flexure_width; c = junction_length; d = edge_space; e = stem_width
     sqrt2 = 2**0.5
-    ax = a/sqrt2/2.0 # x displacement along diagonal cut
+    ax = a*sqrt2/2.0 # x displacement along diagonal cut
+    d = d*sqrt2
     dx = a+b # displacement y direction
     dy = dx # displacement y direction
     h0 = c+a/2.0 # height in triangle
@@ -557,6 +562,35 @@ def make_hexagonal_switchback_gen_reg(cut_width, flexure_width, junction_length,
     return shapely.affinity.scale(geom=sb_square_mod, xfact=xfact)
 
 
+def make_square_coil_gen_reg(cut_width, flexure_width):
+    a = float(cut_width)
+    b = float(flexure_width) # c = junction_length; d = edge_space; e = stem_width
+    coords = list()
+    coords.append((0/2*a+0*b, 0/2*a+0*b)) #0
+    coords.append((1/2*a+1*b, 0/2*a+0*b)) #1 
+    coords.append((1/2*a+1*b, 1/2*a+0*b)) #2
+    coords.append((9/2*a+5*b, 1/2*a+0*b)) #3
+    coords.append((9/2*a+5*b, 7/2*a+4*b)) #4
+    coords.append((3/2*a+1*b, 7/2*a+4*b)) #5
+    coords.append((3/2*a+1*b, 5/2*a+2*b)) #6
+    coords.append((7/2*a+3*b, 5/2*a+2*b)) #7
+    coords.append((7/2*a+3*b, 3/2*a+2*b)) #8
+    coords.append((1/2*a+1*b, 3/2*a+2*b)) #9
+    coords.append((1/2*a+1*b, 9/2*a+4*b)) #10
+    coords.append((5*a+5*b,   9/2*a+4*b)) #11
+    coords.append((5*a+5*b,   5*a+5*b)) #12
+    
+    line_1 = shapely.geometry.LineString(coords)
+    line_2 = shapely.affinity.rotate(line_1, angle=180, origin='center')
+    x = line_1.coords.xy[0][:-1] + line_2.coords.xy[0][:-1]
+    y = line_1.coords.xy[1][:-1] + line_2.coords.xy[1][:-1]
+    coords_merge = [(x,y) for x, y in zip(x,y)]
+#    l1 = l2 = 5*a+5*b
+#    angle = 90
+    return shapely.geometry.Polygon(coords_merge).buffer(0)
+
+
+
 """
 Make unit cell of pattern
 """
@@ -588,6 +622,17 @@ def make_p4m_unit(generating_unit):
     unit_cell = shapely.ops.cascaded_union(shapes)
     return unit_cell
 
+def make_p4_unit(generating_unit):
+    xmin, ymin, xmax, ymax = generating_unit.bounds
+    unit_list = [generating_unit]
+    for fold_rotation in range(1,4):
+        unit_list.append(shapely.affinity.rotate(generating_unit, angle=fold_rotation*90, 
+                                                 origin=(xmax,ymax)))
+#    a1 = unit_list[0].union(unit_list[1])
+#    a2 = unit_list[2].union(unit_list[3])
+#    unit = a1.union(a2)
+#    unit = combine_borders(unit_list)
+    return shapely.ops.cascaded_union(unit_list)
 
     
 """
@@ -624,6 +669,18 @@ def make_square_let_unit(cut_width,flexure_width,junction_length,edge_space,stem
 def make_rectangular_switchback_unit(num_turns, width_stem, length_flex, cut_width, width_flex):
     generating_region = make_rectangular_switchback_gen_reg(num_turns, width_stem, length_flex, cut_width, width_flex)
     return make_pmm_unit(generating_region)
+
+def make_square_coil_unit(cut_width, flexure_width):
+#    gen_reg = make_square_coil_gen_reg(cut_width=cut_width, flexure_width=flexure_width)
+#    l1 = l2 = 5*cut_width+5*flexure_width
+#    angle = 90
+#    unit = make_p4_unit(gen_reg)
+    x=[0.0, 0.0, 8.5, 8.5, 3.5, 3.5, 7.5, 7.5, 0.5, 0.5, 8.5, 8.5,  8.5,  3.5,  3.5,  4.5,  4.5,  7.5,  7.5,  0.5,  0.5,  0.0,  0.0,  1.5,  1.5,  6.5,  6.5,  5.5,  5.5,  2.5,  2.5,  9.5,  9.5,  10.0, 18.5, 18.5, 13.5, 13.5, 17.5, 17.5, 10.5, 10.5, 18.5, 18.5, 20.0, 20.0, 11.5, 11.5, 16.5, 16.5, 12.5, 12.5, 19.5, 19.5, 11.5, 11.5, 11.5, 16.5, 16.5, 15.5, 15.5, 12.5, 12.5, 19.5, 19.5, 20.0, 20.0, 18.5, 18.5, 13.5, 13.5, 14.5, 14.5, 17.5, 17.5, 10.5, 10.5, 10.0, 1.5, 1.5, 6.5, 6.5, 2.5, 2.5, 9.5, 9.5, 1.5, 1.5]
+    y=[0.0, 1.5, 1.5, 6.5, 6.5, 5.5, 5.5, 2.5, 2.5, 9.5, 9.5, 10.0, 18.5, 18.5, 13.5, 13.5, 17.5, 17.5, 10.5, 10.5, 18.5, 18.5, 20.0, 20.0, 11.5, 11.5, 16.5, 16.5, 12.5, 12.5, 19.5, 19.5, 11.5, 11.5, 11.5, 16.5, 16.5, 15.5, 15.5, 12.5, 12.5, 19.5, 19.5, 20.0, 20.0, 18.5, 18.5, 13.5, 13.5, 14.5, 14.5, 17.5, 17.5, 10.5, 10.5, 10.0, 1.5,  1.5,  6.5,  6.5,  2.5,  2.5,  9.5,  9.5,  1.5,  1.5,  0.0,  0.0,  8.5,  8.5,  3.5,  3.5,  7.5,  7.5,  0.5,  0.5,  8.5,  8.5,  8.5, 3.5, 3.5, 4.5, 4.5, 7.5, 7.5, 0.5, 0.5, 0.0]
+    coord = [(x,y) for x,y in zip(x,y)]
+    unit = shapely.geometry.Polygon(coord)
+    return unit
+
 
 # Tiles
 
@@ -734,72 +791,241 @@ def combine_borders(geoms):
             geom.buffer(0.00001, resolution=1) if geom.type =='MultiPolygon' 
             else geom for geom in geoms])
 
-    
-class GenReg():
-    
-    def __init__(self):
-        
-    
-
 """
 Test calls for functions can be done by uncommenting the following lines
 """
+if __name__ == '__main__':
+##    Generators
+#    plotPolygon(make_rectangular_switchback_gen_reg(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
+#    
+#    #Units
+#    plotPolygon(make_ydx_unit(solid_width=1, flexure_length=5, flexure_width=1, cut_width = 0.5 ,thetaDeg=45))
+#    
+#    # LET
+#    plotPolygon(make_outside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
+#    plotPolygon(make_inside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
+#    
+#     Square LET
+#    plotPolygon(make_square_let_gen_reg(cut_width=1, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
+    plotPolygon(make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1, stem_width=1, num_flex=3, inside_start=False))
+#    
+#     Triangular LET
+#    plotPolygon(make_triangular_let_gen_reg(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
+#    plotPolygon(make_triangular_let_unit(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
+#    plotPolygon(make_triangular_let_flexure(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=1,stem_width=1,num_flex=3,inside_start=False))
+#    
+#     Hexagonal LET
+#    plotPolygon(make_hexagonal_let_gen_reg(cut_width=1, flexure_width=2, junction_length=6, edge_space=4, stem_width=2, num_flex=3, inside_start=False)) # 
+#    plotPolygon(make_hexagonal_let_unit(cut_width=1, flexure_width=2, junction_length=6, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # BUG fail due to numerical distortions
+#    plotPolygon(make_hexagonal_let_flexure(cut_width=0.5, flexure_width=1, junction_length=3, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # not reliable (due to scaling?)
+#    
+#    
+#    # Switchbacks
+#    # Comment: a little tweaking is necessary on the 'default'
+#    plotPolygon(make_triangular_switchback_gen_reg(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=4, side_cut=1))
+#    plotPolygon(make_hexagonal_switchback_gen_reg(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=4, side_cut=1))
+#    plotPolygon(make_hexagonal_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=5, side_cut='default'))
+#    plotPolygon(make_rectangular_switchback_unit(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
+#    plotPolygon(make_triangular_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
+#    plotPolygon(make_square_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
+#    plotPolygon(make_hexagonal_switchback_tile(cut_width=0.5, flexure_width=1, junction_length=2, edge_space=1, num_flex=3, side_cut=1))
+#    
+#    ## Coil
+#    unit = (make_square_coil_unit(cut_width=1, flexure_width=1))
+#    unitA = unit.buffer(0.01)
+#    plotPolygon(make_square_coil_unit(cut_width=1, flexure_width=1))
+#    
+#    
+#    #Surfaces
+#    plotPolygon(map_p2_let(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
+#    plotPolygon(map_pmg_let(width_stem=1, length_flex=4, height_stem=0.2, width_flex=1, skew_angle=45, ncell_x=2, ncell_y=10))
+#    
+#    hex_unit = make_triangular_let_unit(cut_width=1,flexure_width=2,junction_length=4,edge_space=4,stem_width=1,num_flex=3,inside_start=False)
+#    mapped_hex = map_surface(unit_cell=hex_unit, ncell_x=3, ncell_y=3, lattice='rhombic')
+#    plotPolygon(mapped_hex)
+#    
+#    
+#    #TEST CALL
+#    polygon = make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False)
+#    polygon = make_square_let_unit(cut_width=1,
+#                                   flexure_width=1,
+#                                   junction_length=3,
+#                                   edge_space=1.5,
+#                                   stem_width=1,
+#                                   num_flex=3,
+#                                   inside_start=False)
+#    print(polygon.type)
+    
+    
 
-#Generators
-#plotPolygon(make_rectangular_switchback_gen_reg(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
+#class GenReg():
+#    
+#    def __init__(self, gen_reg_name, **kwargs):
+#        self.polygon
+#        self.group = None
+#        self.param = {}
+#        self.type = 'A generating region'
+#    
+#    def __str__(self):
+#        return 'A gen reg object'
+#    
+#    def __repr__(self):
+#        return self.polygon
+#    
+#    def set_parameters():
+#        
+#    def plot(self):
+#        """Plots a shapely polygon using the matplotlib library """
+#        import matplotlib.pyplot as plt
+#        if self.polygon.type == 'MultiPolygon': 
+#            print(self.polygon.type)
+#            self.polygon = self.polygon.buffer(0)
+#            if self.polygon.type=='MultPolygon': self.polygon = self.polygon.buffer(0.0001, resolution=1) 
+#        try:
+#            fig = plt.figure(1, figsize=(5,5), dpi=90)
+#            ax = fig.add_subplot(111)
+#            ax.set_title('Polygon')
+#            ax.axis('equal')
+#            x,y = self.polygon.exterior.coords.xy
+#            ax.plot(x,y,'blue')
+#            
+#            for interior in self.polygon.interiors:
+#                x,y = interior.coords.xy
+#                ax.plot(x,y,'blue')
+#        except:
+#            print('Plotting failed of {0}'.format(self.polygon.type))
+#            
+#    def map_surface(self, num_x, num_y):
+#        pass
+#    
+#    def unit(self):
+#        if self.group == p1:
+#        elif self.group == p2:
+##        elif self.group == pm:
+##        elif self.group == pg:
+##        elif self.group == cm:
+#        elif self.group == pmm:
+##        elif self.group == pmg:
+#        elif self.group == p4:
+#        elif self.group == p4m:
+##        elif self.group == p4g
+##        elif self.group == p3:
+##        elif self.group == p3m1:
+##        elif self.group == p31m:
+#        elif self.group == p6:
+#        elif self.group == p6m:
+#            self.unit
+#        elif self.group == None:
+#    
+#    def tile(self):
+#        pass
+#    
+#    self.parameters = {'cut_width':cut_width,
+#                       'flexure_width':flexure_width,
+#                       'junction_length':junction_length,
+#                       'edge_space':edge_space,
+#                       'stem_width':stem_width,
+#                       'num_flex':num_flex,
+#                       'inside_start':inside_start,
+#                       'side_cut':side_cut}
+#    
+
 #
-##Units
-#plotPolygon(make_ydx_unit(solid_width=1, flexure_length=5, flexure_width=1, cut_width = 0.5 ,thetaDeg=45))
-
-## LET
-#plotPolygon(make_outside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
-#plotPolygon(make_inside_let(width_stem=1,length_flex=1,height_stem=1,width_flex=1))
-
-# Square LET
-#plotPolygon(make_square_let_gen_reg(cut_width=1, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
-#plotPolygon(make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
-
-# Triangular LET
-#plotPolygon(make_triangular_let_gen_reg(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
-#plotPolygon(make_triangular_let_unit(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
-#plotPolygon(make_triangular_let_flexure(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=1,stem_width=1,num_flex=3,inside_start=False))
-
-# Hexagonal LET
-#plotPolygon(make_hexagonal_let_gen_reg(cut_width=1, flexure_width=2, junction_length=6, edge_space=4, stem_width=2, num_flex=3, inside_start=False)) # 
-#plotPolygon(make_hexagonal_let_unit(cut_width=1, flexure_width=2, junction_length=6, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # BUG fail due to numerical distortions
-#plotPolygon(make_hexagonal_let_flexure(cut_width=0.5, flexure_width=1, junction_length=3, edge_space=1, stem_width=1, num_flex=3, inside_start=False)) # not reliable (due to scaling?)
-
-
-## Switchbacks
-## Comment: a little tweaking is necessary on the 'default'
-#plotPolygon(make_triangular_switchback_gen_reg(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=4, side_cut=1))
-#plotPolygon(make_hexagonal_switchback_gen_reg(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=4, side_cut=1))
-#plotPolygon(make_hexagonal_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=5, side_cut='default'))
-#plotPolygon(make_rectangular_switchback_unit(num_turns=1, width_stem=1, length_flex=10, cut_width=1, width_flex=2))
-#plotPolygon(make_triangular_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
-#plotPolygon(make_square_switchback_tile(cut_width=1, flexure_width=2, junction_length=5, edge_space=3, num_flex=2, side_cut=1))
-#plotPolygon(make_hexagonal_switchback_tile(cut_width=0.5, flexure_width=1, junction_length=2, edge_space=1, num_flex=3, side_cut=1))
-
-#Surfaces
-#plotPolygon(map_p2_let(width_stem=1,length_flex=4,height_stem=0.2,width_flex=1,skew_angle=45,ncell_x=2, ncell_y=4))
-#plotPolygon(map_pmg_let(width_stem=1, length_flex=4, height_stem=0.2, width_flex=1, skew_angle=45, ncell_x=2, ncell_y=10))
+#"""
+#shape/lattice (sq, rec, rhomb (tri, hex...), parallell)
+#flex type (let, sb...)
+#hierarc (gen_reg, unit)
 #
-#hex_unit = make_triangular_let_unit(cut_width=1,flexure_width=2,junction_length=4,edge_space=4,stem_width=1,num_flex=3,inside_start=False)
-#mapped_hex = map_surface(unit_cell=hex_unit, ncell_x=3, ncell_y=3, lattice='rhombic')
-#plotPolygon(mapped_hex)
-
-
-#TEST CALL
-#polygon = make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False)
-
-
-
-
-
-
-
-
-
-
-
-
+#if let_sq -> give some parameters, make unit?
+#- tiles not a focus...
+#
+#Unit(shape, flextype)
+#Unit.set_parameter(**kwargs)
+#- update polygon...
+#
+#Unit.present_parameters()
+#
+#which gives meaning to vary...
+#thickness = const
+#cut_width
+#flexure_width - cut_width/flexure_width? (might be dependent)
+#junction_length - independent - but want to be as small as possible?
+#stem_width - dependent on flexure width? (stress in torsion vs bending- Ip vs Ib)
+#num_flex
+#inside_start (Only vary in one test. once...)
+#side_cut - dependent on cut_width = assumption
+#
+#
+#if 'word' in 'string':
+#    do something
+#
+#default parameters = 1
+#
+#"""
+         
+    
+    
+#class Unit(shapely.geometry.Polygon):
+#    def __init__(self, polygon, l1, l2, angle):
+#        super(self.__class__, self).__init__()
+#        self.polygon = polygon
+#        self.l1 = l1
+#        self.l2 = l2
+#        self.angle = angle
+#        self.angle_rad = angle*pi/180
+#        self.get_lattice_type() # initialise self.lattice_type
+#        self.get_center() # initialise self.center
+#        self.get_corners() # initialize self.coords as list of tuples
+#    
+#    def __repr__(self):
+##        self.polygon
+#        return 'A {0} unit'.format(self.lattice_type)
+#    
+#    def __str__(self):
+#        return 'A {0} unit with angle={1}, l1={2}, l2={3}'.format(self.lattice_type, self.angle, self.l1, self.l2)
+#    
+#    def get_lattice_type(self):
+#        if self.angle > 90:
+#            print('Invalid too big angle')
+#            return
+#        if self.angle == 90  and self.l1 == self.l2:
+#            self.lattice_type = 'square'
+#        elif self.angle == 90 and self.l1 != self.l2:
+#            self.lattice_type = 'rectangle'
+#        elif self.angle != 90 and self.l1 == self.l2:
+#            self.lattice_type = 'rhombe'
+#        else:
+#            self.lattice_type = 'parallelogram'
+#            
+#    def get_center(self):
+#        xmin, ymin, xmax, ymax = self.polygon.bounds
+#        self.center = ((xmin+xmax)/2, (ymin+ymax)/2)
+#    
+#    def get_corners(self):
+#        from math import cos, sin
+#        d1 = (self.l1 + self.l2*cos(self.angle_rad))/2
+#        d2 = self.l2*sin(self.angle_rad)/2
+#        cx, cy = [self.center[0], self.center[1]]
+#        self.unit_coords = [(cx-d1, cy-d2), (cx+self.l1-d1, cy-d2), 
+#                            (cx+d1, cy+d2), (cx-self.l1+d1, cy+d2)]
+#        
+#    def update(self):
+#        self.get_center()
+#        self.get_corners()
+#        
+#    def translate(self, xoff, yoff):
+#        self.polygon = translate(self.polygon, xoff=xoff, yoff=yoff)
+#        self.update()
+#    
+#    def getType(input_string):
+#        self.parameters = {}
+#        self.polygon = getattr(name, input_string)(self.parameters)
+#        module = __import__('patternGenerators')
+#        
+#    def set_parameter(self, key, val):
+#        self.parameter[key] = val
+#        self.update_polygon()
+#        self.update()
+#        
+#    def update_polygon(self):
+#        self.polygon = getattr() parameters
