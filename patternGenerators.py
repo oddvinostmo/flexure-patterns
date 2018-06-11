@@ -72,7 +72,7 @@ def make_torsion_flexure(width_stem,length_flex,height_stem,width_flex):
     return shapely.geometry.Polygon(coords)
 
 
-def make_ydx_gen_reg(solid_width,flexure_length,flexure_width,cut_width,thetaDeg):
+def make_ydx_gen_reg(solid_width, flexure_length, flexure_width, cut_width, thetaDeg):
     """
     Full unit generated through pmm
     l1, l2, angle = w, h, 90
@@ -124,7 +124,8 @@ def make_square_let_gen_reg(cut_width, flexure_width, junction_length,
     import numpy as np
     a = cut_width; b = flexure_width; c = junction_length; d = edge_space; e = stem_width
     sqrt2 = 2**0.5
-    ax = a/sqrt2/2.0 # x displacement along diagonal cut
+    ax = a*sqrt2/2.0 # x displacement along diagonal cut
+    d = d*sqrt2
     dx = a+b # displacement y direction
     dy = dx # displacement y direction
     h0 = c+a/2.0 # height in triangle
@@ -806,7 +807,7 @@ if __name__ == '__main__':
 #    
 #     Square LET
 #    plotPolygon(make_square_let_gen_reg(cut_width=1, flexure_width=1 ,junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
-    plotPolygon(make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1.5, stem_width=1, num_flex=3, inside_start=False))
+    plotPolygon(make_square_let_unit(cut_width=1, flexure_width=1, junction_length=3, edge_space=1, stem_width=1, num_flex=3, inside_start=False))
 #    
 #     Triangular LET
 #    plotPolygon(make_triangular_let_gen_reg(cut_width=0.5,flexure_width=1,junction_length=3,edge_space=2,stem_width=1,num_flex=3,inside_start=False))
